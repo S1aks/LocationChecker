@@ -11,36 +11,110 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.provider.Settings
-import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.fragment.app.Fragment
+import androidx.core.os.bundleOf
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
+import com.s1aks.locchecker.R
 import com.s1aks.locchecker.databinding.FragmentMapBinding
+import com.s1aks.locchecker.domain.entities.MapPosition
+import com.s1aks.locchecker.ui.base.BaseFragment
+import com.s1aks.locchecker.ui.edit_dialog.EditMarkerDialogFragment
+import com.s1aks.locchecker.ui.edit_dialog.OnSaveClickListener
+import com.s1aks.locchecker.ui.markers.MarkersFragment
+import org.koin.androidx.viewmodel.ext.android.viewModel
+import java.math.RoundingMode
 
+class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate),
+    OnMapReadyCallback, LocationListener, OnSaveClickListener {
 
-class MapFragment : Fragment(), OnMapReadyCallback, LocationListener {
-
-    private var _binding: FragmentMapBinding? = null
-    private val binding get() = _binding ?: throw RuntimeException("ViewBinding access error!")
+    private var markerId: Int? = null
+    private val mapViewModel: MapViewModel by viewModel()
     private var map: GoogleMap? = null
-
-    //private var cameraPosition: CameraPosition? = null
     private var isGPSEnabled = false
     private var isNetworkEnabled = false
     private var canGetLocation = false
     private var location: Location? = null
     private var locationManager: LocationManager? = null
+    private val addMarkerAlertDialog: EditMarkerDialogFragment by lazy {
+        EditMarkerDialogFragment(null, this)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
+    }
+
+    override fun readArguments(bundle: Bundle) {
+        markerId = bundle.getInt(MARKER_ID)
+    }
+
+    override fun initView() {
+        val mapFragment =
+            childFragmentManager.findFragmentById(binding.map.id) as SupportMapFragment?
+        mapFragment?.getMapAsync(this)
+        (activity as AppCompatActivity).supportActionBar?.title =
+            getString(R.string.app_name)
+    }
+
+    override fun initListeners() {
+        binding.myLocationFab.setOnClickListener {
+            binding.progressBar.visibility = View.VISIBLE
+            getLocation()
+        }
+        binding.addMarkerFab.setOnClickListener {
+            addMarkerAlertDialog.show(requireActivity().supportFragmentManager, "")
+        }
+    }
+
+    override fun initObservers() {
+    }
+
+    override fun onSaveClicked(title: String, information: String) {
+        mapViewModel.saveMarker(
+            MapPosition(
+                latitude = location?.latitude ?: 0.0,
+                longitude = location?.longitude ?: 0.0,
+                title = title,
+                information = information
+            )
+        )
+        Toast.makeText(
+            requireContext(),
+            getString(R.string.toast_save_marker_text),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (markerId != null) {
+            mapViewModel.data.observe(viewLifecycleOwner) {
+                it?.let {
+                    map?.goToLocation(LatLng(it.latitude, it.longitude))
+                    (activity as AppCompatActivity).supportActionBar?.title = it.title
+                }
+            }
+            mapViewModel.getMarker(markerId!!)
+            setMenuVisibility(false)
+            markerId = null
+        }
+    }
 
     @SuppressLint("MissingPermission")
-    private fun getLocation(): Location? {
+    private fun getLocation() {
         try {
             locationManager = context?.getSystemService(LOCATION_SERVICE) as LocationManager
             isGPSEnabled =
@@ -48,7 +122,7 @@ class MapFragment : Fragment(), OnMapReadyCallback, LocationListener {
             isNetworkEnabled =
                 locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ?: false
             if (!isGPSEnabled && !isNetworkEnabled) {
-                // no network provider is enabled
+                showSettingsAlert()
             } else {
                 canGetLocation = true
                 if (isNetworkEnabled) {
@@ -104,7 +178,6 @@ class MapFragment : Fragment(), OnMapReadyCallback, LocationListener {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        return location
     }
 
     @SuppressLint("MissingPermission")
@@ -114,66 +187,87 @@ class MapFragment : Fragment(), OnMapReadyCallback, LocationListener {
 
     private fun showSettingsAlert() {
         AlertDialog.Builder(requireContext())
-            .setTitle("Настройка GPS")
-            .setMessage("GPS отключен. Вы хотите попасть в меню настроек?")
-            .setPositiveButton("Настройки") { _, _ ->
+            .setTitle(getString(R.string.map_fragment_alert_dialog_title))
+            .setMessage(getString(R.string.map_fragment_alert_dialog_message))
+            .setPositiveButton(getString(R.string.map_fragment_alert_dialog_positive_button_text))
+            { _, _ ->
                 context?.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
-            .setNegativeButton("Отмена") { dialog, _ ->
+            .setNegativeButton(getString(R.string.map_fragment_alert_dialog_negative_button_text))
+            { dialog, _ ->
                 dialog.cancel()
             }
             .show()
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
-    ): View {
-        _binding = FragmentMapBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val mapFragment =
-            childFragmentManager.findFragmentById(binding.map.id) as SupportMapFragment?
-        mapFragment?.getMapAsync(this)
-    }
-
-    private fun GoogleMap.goToLocation(point: LatLng, title: String) {
+    private fun GoogleMap.goToLocation(point: LatLng) {
+        this.clear()
         this.addMarker(
             MarkerOptions()
                 .position(point)
-                .title(title)
         )
-        this.moveCamera(CameraUpdateFactory.newLatLngZoom(point, MAP_ZOOM_ON_POSITION))
+        val cameraPosition = CameraPosition.Builder()
+            .target(point)
+            .zoom(MAP_ZOOM_ON_POSITION)
+            .bearing(0f)
+            .tilt(0f)
+            .build()
+        this.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+        binding.addMarkerFab.isEnabled = true
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
-        map = googleMap
-        when (location) {
-            null -> location = getLocation()
-            else -> map?.goToLocation(
-                LatLng(location!!.latitude, location!!.longitude),
-                "Моё местоположение"
-            )
+        if (map == null) {
+            map = googleMap
+            map?.setOnMapClickListener {
+                location = Location("").also { loc ->
+                    loc.latitude =
+                        it.latitude.toBigDecimal().setScale(7, RoundingMode.FLOOR).toDouble()
+                    loc.longitude =
+                        it.longitude.toBigDecimal().setScale(7, RoundingMode.FLOOR).toDouble()
+                }
+                map!!.goToLocation(it)
+            }
         }
     }
 
     override fun onLocationChanged(location: Location) {
+        binding.progressBar.visibility = View.GONE
         this.location = location
-        map?.goToLocation(LatLng(location.latitude, location.longitude), "Моё местоположение")
+        map?.goToLocation(LatLng(location.latitude, location.longitude))
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        menu.clear()
+        inflater.inflate(R.menu.app_bar_menu, menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.markers -> {
+                requireActivity().supportFragmentManager.beginTransaction()
+                    .replace(R.id.container, MarkersFragment.newInstance())
+                    .addToBackStack(null)
+                    .commit()
+                true
+            }
+            else -> false
+        }
     }
 
     override fun onDestroyView() {
         stopUsingGPS()
-        _binding = null
         super.onDestroyView()
     }
 
     companion object {
-        fun newInstance() = MapFragment()
+        fun newInstance(markerId: Int?) = MapFragment().apply {
+            markerId?.let { arguments = bundleOf(MARKER_ID to markerId) }
+        }
+
+        const val MARKER_ID = "marker_id"
         private const val MIN_DISTANCE_CHANGE_FOR_UPDATES: Float = 10.0F // 10 meters
         private const val MIN_TIME_BW_UPDATES = (1000 * 60 * 1).toLong() // 1 minute
-        private const val MAP_ZOOM_ON_POSITION: Float = 15.0F // 1 minute
+        private const val MAP_ZOOM_ON_POSITION: Float = 18.0F
     }
 }

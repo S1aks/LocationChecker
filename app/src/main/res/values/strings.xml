@@ -3,4 +3,19 @@
     <string name="menu_markers">Маркеры</string>
     <string name="fragment_map_fab_my_location_description">Текущее местоположение</string>
     <string name="fragment_map_fab_add_marker_description">Добавить маркер</string>
+    <string name="map_fragment_alert_dialog_title">Настройка GPS</string>
+    <string name="map_fragment_alert_dialog_message">GPS отключен. Вы хотите попасть в меню настроек?</string>
+    <string name="map_fragment_alert_dialog_positive_button_text">Настройки</string>
+    <string name="map_fragment_alert_dialog_negative_button_text">Отмена</string>
+    <string name="fragment_binding_exception_message">ViewBinding access error!</string>
+    <string name="view_binding_access_error_message">ViewBinding access error!</string>
+    <string name="dialog_hint_title">Имя метки</string>
+    <string name="dialog_hint_information">Описание метки</string>
+    <string name="marker_items_context_menu_edit">Редактировать</string>
+    <string name="marker_items_context_menu_delete">Удалить</string>
+    <string name="dialog_title">Сохранение маркера</string>
+    <string name="dialog_save_button_text">Сохранить</string>
+    <string name="dialog_cancel_button_text">Отмена</string>
+    <string name="bar_title_markers">Избранное</string>
+    <string name="toast_save_marker_text">Метка сохранена</string>
 </resources>
