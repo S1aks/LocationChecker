@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Context.LOCATION_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -36,11 +37,13 @@ import com.s1aks.locchecker.ui.edit_dialog.OnSaveClickListener
 import com.s1aks.locchecker.ui.markers.MarkersFragment
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.math.RoundingMode
+import kotlin.concurrent.thread
 
 class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate),
     OnMapReadyCallback, LocationListener, OnSaveClickListener {
 
-    private var markerId: Int? = null
+    private var markerId: Int = -1
+    private var geoString: String? = null
     private val mapViewModel: MapViewModel by viewModel()
     private var map: GoogleMap? = null
     private var isGPSEnabled = false
@@ -58,7 +61,8 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
     }
 
     override fun readArguments(bundle: Bundle) {
-        markerId = bundle.getInt(MARKER_ID)
+        markerId = bundle.getInt(MARKER_ID, -1)
+        geoString = bundle.getString(GEO_STRING)
     }
 
     override fun initView() {
@@ -100,16 +104,16 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
 
     override fun onResume() {
         super.onResume()
-        if (markerId != null) {
+        if (markerId > 0) {
             mapViewModel.data.observe(viewLifecycleOwner) {
                 it?.let {
                     map?.goToLocation(LatLng(it.latitude, it.longitude))
                     (activity as AppCompatActivity).supportActionBar?.title = it.title
                 }
             }
-            mapViewModel.getMarker(markerId!!)
+            mapViewModel.getMarker(markerId)
             setMenuVisibility(false)
-            markerId = null
+            markerId = -1
         }
     }
 
@@ -216,17 +220,52 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
         binding.addMarkerFab.isEnabled = true
     }
 
+    private fun getLatLngFromGeoString(geoString: String): LatLng? {
+        val locValues = Regex("-?\\d+.\\d+").findAll(geoString)
+            .map { it.value.toDouble() }
+            .toList()
+        if (locValues.isNotEmpty()) {
+            return LatLng(locValues[0], locValues[1])
+        }
+        return null
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         if (map == null) {
             map = googleMap
             map?.setOnMapClickListener {
-                location = Location("").also { loc ->
-                    loc.latitude =
+                location = Location("").apply {
+                    latitude =
                         it.latitude.toBigDecimal().setScale(7, RoundingMode.FLOOR).toDouble()
-                    loc.longitude =
+                    longitude =
                         it.longitude.toBigDecimal().setScale(7, RoundingMode.FLOOR).toDouble()
                 }
                 map!!.goToLocation(it)
+            }
+        }
+        geoString?.let { geoStr ->
+            if (geoStr.substring(0, 3) == "geo") {
+                getLatLngFromGeoString(geoStr)?.let { position ->
+                    map?.goToLocation(position)
+                }
+            } else {
+                thread {
+                    val geocoder = Geocoder(requireContext())
+                    try {
+                        var geoResults = geocoder.getFromLocationName(geoStr, 1)
+                        while (geoResults.size == 0) {
+                            geoResults = geocoder.getFromLocationName(geoStr, 1)
+                        }
+                        val address = geoResults[0]
+                        location = Location("").apply {
+                            latitude = address.latitude
+                            longitude = address.longitude
+                        }
+                        map!!.goToLocation(LatLng(address.latitude, address.longitude))
+                    } catch (e: java.lang.Exception) {
+                        print(e.message)
+                    }
+                }.run()
             }
         }
     }
@@ -261,10 +300,15 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
     }
 
     companion object {
+        fun newInstanceFromIntent(geoString: String?) = MapFragment().apply {
+            geoString?.let { arguments = bundleOf(GEO_STRING to geoString) }
+        }
+
         fun newInstance(markerId: Int?) = MapFragment().apply {
             markerId?.let { arguments = bundleOf(MARKER_ID to markerId) }
         }
 
+        const val GEO_STRING = "geo_string"
         const val MARKER_ID = "marker_id"
         private const val MIN_DISTANCE_CHANGE_FOR_UPDATES: Float = 10.0F // 10 meters
         private const val MIN_TIME_BW_UPDATES = (1000 * 60 * 1).toLong() // 1 minute
