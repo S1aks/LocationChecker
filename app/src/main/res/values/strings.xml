@@ -18,4 +18,5 @@
     <string name="dialog_cancel_button_text">Отмена</string>
     <string name="bar_title_markers">Избранное</string>
     <string name="toast_save_marker_text">Метка сохранена</string>
+    <string name="fragment_map_search_hint">Поиск местоположения</string>
 </resources>
