@@ -3,6 +3,7 @@ package com.s1aks.locchecker.ui.map
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.content.Context.LOCATION_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -16,6 +17,8 @@ import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -81,6 +84,26 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
         binding.addMarkerFab.setOnClickListener {
             addMarkerAlertDialog.show(requireActivity().supportFragmentManager, "")
         }
+        binding.searchEdit.setOnEditorActionListener { v, actionId, event ->
+            when (actionId) {
+                EditorInfo.IME_ACTION_SEARCH -> {
+                    hideKeyboardAndSearch(v)
+                    return@setOnEditorActionListener true
+                }
+                else -> return@setOnEditorActionListener false
+            }
+        }
+        binding.searchEditLayout.setEndIconOnClickListener {
+            hideKeyboardAndSearch(it.rootView)
+        }
+    }
+
+    private fun hideKeyboardAndSearch(v: View) {
+        val imm = requireContext()
+            .getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(v.windowToken, 0)
+        v.clearFocus()
+        sendToGeocoderAndFind(binding.searchEdit.text.toString())
     }
 
     override fun initObservers() {
@@ -230,6 +253,26 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
         return null
     }
 
+    private fun sendToGeocoderAndFind(geoString: String) {
+        thread {
+            val geocoder = Geocoder(requireContext())
+            try {
+                var geoResults = geocoder.getFromLocationName(geoString, 1)
+                while (geoResults.size == 0) {
+                    geoResults = geocoder.getFromLocationName(geoString, 1)
+                }
+                val address = geoResults[0]
+                location = Location("").apply {
+                    latitude = address.latitude
+                    longitude = address.longitude
+                }
+                map!!.goToLocation(LatLng(address.latitude, address.longitude))
+            } catch (e: java.lang.Exception) {
+                print(e.message)
+            }
+        }.run()
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         if (map == null) {
             map = googleMap
@@ -249,23 +292,7 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
                     map?.goToLocation(position)
                 }
             } else {
-                thread {
-                    val geocoder = Geocoder(requireContext())
-                    try {
-                        var geoResults = geocoder.getFromLocationName(geoStr, 1)
-                        while (geoResults.size == 0) {
-                            geoResults = geocoder.getFromLocationName(geoStr, 1)
-                        }
-                        val address = geoResults[0]
-                        location = Location("").apply {
-                            latitude = address.latitude
-                            longitude = address.longitude
-                        }
-                        map!!.goToLocation(LatLng(address.latitude, address.longitude))
-                    } catch (e: java.lang.Exception) {
-                        print(e.message)
-                    }
-                }.run()
+                sendToGeocoderAndFind(geoStr)
             }
         }
     }
