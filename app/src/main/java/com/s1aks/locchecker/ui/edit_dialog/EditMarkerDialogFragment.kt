@@ -21,6 +21,7 @@ class EditMarkerDialogFragment(
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         _binding = DialogAddMarkerBinding.inflate(layoutInflater)
         return AlertDialog.Builder(requireContext())
+            .setCancelable(false)
             .setTitle(getString(R.string.dialog_title))
             .setView(binding.root)
             .setPositiveButton(
@@ -32,7 +33,8 @@ class EditMarkerDialogFragment(
                 )
             }
             .setNegativeButton(getString(R.string.dialog_cancel_button_text), null)
-            .create().apply {
+            .create()
+            .apply {
                 marker?.let {
                     binding.markerTitle.setText(it.title)
                     binding.markerInformation.setText(it.information)
