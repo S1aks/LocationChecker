@@ -153,58 +153,39 @@ class MapFragment : BaseFragment<FragmentMapBinding>(FragmentMapBinding::inflate
             } else {
                 canGetLocation = true
                 if (isNetworkEnabled) {
-                    if (ActivityCompat.checkSelfPermission(
-                            requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
-                        ) != PackageManager.PERMISSION_GRANTED &&
-                        ActivityCompat.checkSelfPermission(
-                            requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        ActivityCompat.requestPermissions(
-                            (context as Activity?)!!,
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            ), 101
-                        )
-                    }
-                    locationManager?.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER,
-                        MIN_TIME_BW_UPDATES,
-                        MIN_DISTANCE_CHANGE_FOR_UPDATES, this
-                    )
-                    location =
-                        locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    checkPermissionsAndGetLocation(LocationManager.NETWORK_PROVIDER)
                 }
                 if (isGPSEnabled) {
                     if (location == null) {
-                        if (ActivityCompat.checkSelfPermission(
-                                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
-                            ) != PackageManager.PERMISSION_GRANTED &&
-                            ActivityCompat.checkSelfPermission(
-                                requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION
-                            ) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            ActivityCompat.requestPermissions(
-                                (context as Activity?)!!, arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                ), 101
-                            )
-                        }
-                        locationManager?.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER,
-                            MIN_TIME_BW_UPDATES,
-                            MIN_DISTANCE_CHANGE_FOR_UPDATES, this
-                        )
-                        location =
-                            locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                        checkPermissionsAndGetLocation(LocationManager.GPS_PROVIDER)
                     }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun checkPermissionsAndGetLocation(provider: String) {
+        if (ActivityCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                (context as Activity?)!!,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ), 101
+            )
+        }
+        locationManager?.requestLocationUpdates(
+            provider, MIN_TIME_BW_UPDATES, MIN_DISTANCE_CHANGE_FOR_UPDATES, this
+        )
+        location = locationManager?.getLastKnownLocation(provider)
     }
 
     @SuppressLint("MissingPermission")
